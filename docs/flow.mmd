@@ -1,0 +1,47 @@
+sequenceDiagram
+    autonumber
+    actor Human
+    participant Chrome as Chrome<br/>(user-launched w/ --remote-debugging-port)
+    participant RealApp as Real ChatGPT<br/>(tab in Chrome)
+    participant Replicata as replicata core<br/>(Node.js)
+    participant Server as replicata HTTP server<br/>(127.0.0.1:3589)
+    participant Renderer as user's renderer<br/>(localhost:5173)
+    participant UI as replicata UI tab
+
+    Note over Human,UI: Setup (once per session)
+    Human->>Chrome: npm run chrome<br/>(launches Chrome w/ --remote-debugging-port=9222)
+    Human->>RealApp: log into ChatGPT
+    Replicata->>Chrome: chromium.connectOverCDP (npm run dev)
+    Replicata->>RealApp: install passive fetch tap<br/>(addInitScript + evaluate)
+    Replicata->>Renderer: install fetch redirect<br/>(endpoint routes → replicata server)
+    Replicata->>UI: navigate to /ui (served by replicata)
+    UI-->>Server: SSE /events (live state push)
+
+    Note over Human,Renderer: Human-driven interaction
+    Human->>RealApp: types prompt, submits
+    RealApp->>RealApp: ChatGPT issues fetch('/backend-api/conversation')
+    Note over RealApp: tap is transparent —<br/>real fetch executes normally
+
+    Note over RealApp: response.body.tee() splits<br/>the stream into two readers
+    RealApp->>RealApp: leg A → ChatGPT UI<br/>(normal render)
+    RealApp-)Replicata: leg B → replicata observes<br/>via __replicataChunk(chunk)
+
+    Replicata->>Replicata: StreamBuffer.addChunk()
+
+    Note over Renderer,Server: Renderer consumes (after stream completes)
+    Renderer->>Renderer: fetch('/api/chat')
+    Renderer->>Server: (redirected) GET /stream/ep_xxx
+    Note over Server: stream not complete yet → hold connection
+    RealApp-)Replicata: __replicataStreamEnd(id)
+    Replicata->>Server: markDone(id) → onStreamDone fires
+    Server->>Renderer: replay chunks with original timing
+    Server->>Server: connection closed after last chunk
+
+    Note over Human,UI: Next message
+    Renderer->>Server: fetch('/api/chat') again
+    Server-->>Renderer: holds connection open<br/>(no unserved stream yet)
+    Human->>RealApp: sends another message
+    RealApp-)Replicata: new stream observed
+    Note over Server: waits for completion
+    RealApp-)Replicata: stream ends
+    Server-)Renderer: replays the new stream

@@ -1,0 +1,56 @@
+sequenceDiagram
+    autonumber
+    actor Human
+    participant UI as replicata UI tab
+    participant Server as replicata HTTP server<br/>(127.0.0.1:3589)
+    participant Replicata as replicata core<br/>(Node.js)
+    participant RealApp as Real ChatGPT<br/>(tab in Chrome)
+    participant Disk as ~/.replicata/tags/*.json
+
+    Note over Human,Disk: Installation (on replicata start)
+    Replicata->>Disk: read existing tags (if any)
+    Replicata->>RealApp: install __replicataResolveTag + __replicataHighlightMatches<br/>(addInitScript + evaluate, idempotent)
+    Replicata->>RealApp: install dom-watch MutationObserver<br/>(debounced 750ms → __replicataDomChanged)
+
+    Note over Human,Disk: Picking a tag
+    Human->>UI: click "+ Tag element"
+    UI->>Server: POST /tag/start (long-poll)
+    Server->>Replicata: startPicker()
+    Replicata->>RealApp: Overlay.setInspectMode (searchForNode)
+    Human->>RealApp: click element in real app
+    RealApp-)Replicata: Overlay.inspectNodeRequested<br/>(backendNodeId)
+    Replicata->>RealApp: DOM.resolveNode → Runtime.callFunctionOn<br/>(element-info helper)
+    RealApp-->>Replicata: { tagName, text, attrs,<br/>testId?, ariaLabel?, role?,<br/>classPath, nthChildPath, cssPath }
+    Replicata->>RealApp: Overlay.setInspectMode(none) + disable
+    Replicata-->>Server: PickedElement
+    Server-->>UI: PickedElement
+    UI->>UI: show naming form w/ suggested name
+    Human->>UI: enters name, clicks Save
+    UI->>Server: POST /tag/name { name, picked }
+    Server->>Replicata: createTag(name, picked)
+    Replicata->>Disk: save JSON (schemaVersion: 1)
+    Replicata->>RealApp: __replicataSetTags([..., new tag])<br/>(refresh event-tap cache)
+    Replicata->>RealApp: __replicataResolveTag(locator) (verify)
+    Replicata-->>Server: Tag w/ resolution
+    Server-->>UI: Tag w/ resolution
+    UI->>UI: render tag in list
+
+    Note over Human,Disk: Verify on reload / DOM change
+    RealApp-)Replicata: __replicataDomChanged() (debounced)
+    Replicata->>Replicata: throttled scheduleVerify<br/>(2s min interval)
+    Replicata->>RealApp: __replicataResolveTag(locator) per tag
+    RealApp-->>Replicata: { status, matchedBy, count }
+    Replicata->>Replicata: resolutionByTagId.set(id, result)
+    UI->>Server: GET /tags (polling every 1.5s)
+    Server-->>UI: tags w/ resolution + paired status
+    UI->>UI: render ✓ / ⚠ / ×N per tag
+
+    Note over Human,Disk: Hover to highlight
+    Human->>UI: hover tag row
+    UI->>Server: POST /tag/:id/highlight
+    Server->>Replicata: highlightTag(id)
+    Replicata->>RealApp: __replicataHighlightMatches(locator)<br/>(draws DOM overlays on each match, rAF-tracked)
+    Human->>UI: move mouse away
+    UI->>Server: POST /highlight/clear
+    Server->>Replicata: clearHighlight()
+    Replicata->>RealApp: __replicataHideHighlights()

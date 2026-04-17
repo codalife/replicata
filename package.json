@@ -1,0 +1,39 @@
+{
+  "name": "replicata",
+  "version": "0.1.0",
+  "description": "Build frontend renderers against real production streaming responses",
+  "type": "module",
+  "bin": {
+    "replicata": "dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc && tsc -p tsconfig.injected.json && vite build",
+    "start": "node dist/cli/index.js",
+    "dev": "npm run build && node dist/cli/index.js",
+    "dev:watch": "nodemon --watch core --watch cli --watch ui/App.svelte -e ts,svelte --exec 'npm run build && node dist/cli/index.js'",
+    "//chrome-port": "keep --remote-debugging-port in sync with REPLICATA.cdpPort in core/config.ts",
+    "chrome": "google-chrome --remote-debugging-port=9222 --user-data-dir=$HOME/.replicata/chrome-profile --no-first-run --no-default-browser-check",
+    "example": "cd examples/react-renderer && npm install && npm run dev",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.0.0",
+    "@types/node": "^25.6.0",
+    "esbuild": "^0.28.0",
+    "nodemon": "^3.1.14",
+    "svelte": "^5.55.3",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2",
+    "vite": "^8.0.8",
+    "vitest": "^4.1.4"
+  },
+  "dependencies": {
+    "playwright-core": "^1.59.1",
+    "shepherd.js": "^15.2.2",
+    "xstate": "^5.30.0"
+  }
+}

@@ -1,0 +1,43 @@
+sequenceDiagram
+    autonumber
+    actor Human
+    participant RealApp as Real ChatGPT<br/>(tab in Chrome)
+    participant Replicata as replicata core<br/>(Node.js)
+    participant Renderer as user's renderer<br/>(localhost:5173)
+    participant UI as replicata UI tab
+    participant Server as replicata HTTP server
+
+    Note over Human,Server: Installation (on replicata start)
+    Replicata->>RealApp: install event-tap<br/>(document-level capture listeners:<br/>click/mousedown/mouseup/focus/blur/<br/>keydown/keyup/input/change/submit)
+    Replicata->>RealApp: __replicataSetTags([...])<br/>(populates browser-side match cache)
+    Replicata->>Renderer: install event-fire<br/>(__replicataFireEvent + pair reporter)
+
+    Note over Renderer: Pair reporting (continuous)
+    Renderer->>Renderer: MutationObserver on [data-replicata-tag]<br/>(debounced 300ms)
+    Renderer-)Replicata: __replicataReportPairs(["send-button", "message-input"])
+    Replicata->>Replicata: update rendererPairs Set
+    UI->>Server: GET /tags (polling)
+    Server-->>UI: tags w/ paired: true | false
+    UI->>UI: render ↔ (paired) or "copy attr" (unpaired)
+
+    Note over Human,Server: User event forwarding
+    Human->>RealApp: types in tagged textarea
+    RealApp->>RealApp: browser fires input event<br/>(target = contenteditable)
+    Note over RealApp: event-tap capture-phase handler fires
+    RealApp->>RealApp: findMatchingTags(target) —<br/>scans cached Map<tagName, Element[]><br/>checking target === el or el.contains(target)
+    RealApp->>RealApp: extractDetail(event) — pulls<br/>{type, button, key, clientX,<br/>ctrlKey, value, ...}<br/>(textContent fallback for contenteditable)
+    RealApp-)Replicata: __replicataEvent(tagName, type, detail)<br/>(fire-and-forget, one call per matched tag)
+
+    Replicata->>Renderer: page.evaluate __replicataFireEvent<br/>(tagName, type, detail)
+    Renderer->>Renderer: querySelectorAll<br/>([data-replicata-tag="tagName"])
+    Renderer->>Renderer: dispatch new MouseEvent /<br/>KeyboardEvent / Event (bubbles: true)
+    Renderer->>Renderer: user's onClick / onInput /<br/>onKeyDown handler fires
+
+    Note over RealApp: Cache invalidation
+    RealApp->>RealApp: DOM mutates (page content changes)
+    RealApp->>RealApp: event-tap MutationObserver<br/>(debounced 500ms)
+    RealApp->>RealApp: recomputeCache() —<br/>re-resolves each tag's selectors,<br/>refills Map<tagName, Element[]>
+
+    Note over Replicata,Renderer: Tag set changes (user adds/removes/broadens)
+    Replicata->>RealApp: __replicataSetTags(newTagList)
+    RealApp->>RealApp: recomputeCache()
