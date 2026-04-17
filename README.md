@@ -4,6 +4,8 @@ Observe real streaming web apps and replay their bytes into your local renderer.
 
 Replicata is a passive tap on your own browser. You drive a real app (ChatGPT, Claude, any streaming web app), replicata observes the bytes via CDP, and replays them into your localhost code. Your renderer doesn't know the difference — it just calls `fetch()` and gets real production data back.
 
+![replicata demo](assets/hero.gif)
+
 ## How it works
 
 ```
