@@ -1592,6 +1592,9 @@
                     copy attr
                   </button>
                 {/if}
+                {#if tag.eventCounts}
+                  <span class="event-counts">{Object.entries(tag.eventCounts).map(([t, n]) => `${t}:${n}`).join(' ')}</span>
+                {/if}
                 <span class="tag-name">&lt;{tag.preview.tagName}&gt;</span>
                 {#if tag.preview.text}<span class="tag-text">{tag.preview.text}</span>{/if}
                 <span class="spacer"></span>
@@ -2274,6 +2277,7 @@
   .cssPath { font-family: monospace; font-size: 11px; color: #888; margin-top: 4px; word-break: break-all; }
   .tag-name { color: #e94560; font-family: monospace; font-size: 12px; }
   .tag-text { color: #aaa; font-size: 12px; margin-left: 6px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .event-counts { font-size: 10px; color: #8b8b8b; background: #1a1f2e; border: 1px solid #333; border-radius: 3px; padding: 1px 5px; margin-left: 4px; font-family: monospace; }
 
   .taglist { list-style: none; margin-top: 8px; }
   .tag-item { background: #0f1424; border: 1px solid #333; border-radius: 6px; margin-bottom: 4px; overflow: hidden; transition: border-color 120ms; }

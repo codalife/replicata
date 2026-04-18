@@ -133,6 +133,7 @@ export class ReplicataRuntime implements TaggingApi {
   private resolver?: TagResolver;
   private highlighter?: Highlighter;
   private resolutionByTagId = new Map<string, ResolutionResult>();
+  private eventCountsByTag = new Map<string, Record<string, number>>();
   private verifyLastRun = 0;
   private verifyScheduled: NodeJS.Timeout | null = null;
   private readonly VERIFY_MIN_INTERVAL_MS = 2000;
@@ -555,6 +556,7 @@ export class ReplicataRuntime implements TaggingApi {
     this.realAppPage = undefined;
     this.realAppTargetId = null;
     this.resolutionByTagId.clear();
+    this.eventCountsByTag.clear();
     this.discovery.clear();
     this.discoveryGroups = null;
     this.discoveryDismissed = null;
@@ -779,6 +781,7 @@ export class ReplicataRuntime implements TaggingApi {
       ...t,
       resolution: this.resolutionByTagId.get(t.id),
       paired: this.rendererPairs.has(t.name),
+      eventCounts: this.eventCountsByTag.get(t.name),
     }));
   }
 
@@ -909,6 +912,10 @@ export class ReplicataRuntime implements TaggingApi {
   }
 
   private async forwardEvent(tagName: string, type: string, detail: unknown): Promise<void> {
+    const counts = this.eventCountsByTag.get(tagName) ?? {};
+    counts[type] = (counts[type] ?? 0) + 1;
+    this.eventCountsByTag.set(tagName, counts);
+
     if (!this.rendererPage) return;
     try {
       const fired = await this.rendererPage.evaluate(

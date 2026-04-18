@@ -5,6 +5,7 @@ import type { TagTimeline } from './timeline.js';
 export interface TagWithResolution extends Tag {
   resolution?: ResolutionResult;
   paired?: boolean;
+  eventCounts?: Record<string, number>;
 }
 
 export interface TaggingApi {
