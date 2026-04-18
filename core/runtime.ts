@@ -495,6 +495,30 @@ export class ReplicataRuntime implements TaggingApi {
       if (filtered.length > 0) this.discovery.ingest(filtered);
     }).catch(() => {});
     await installInitScript(page, loadInjected('discovery'));
+
+    // Inject into existing iframes (exposeFunction is already page-wide).
+    await this.injectIntoFrames(page);
+
+    page.on('frameattached', (frame) => {
+      frame.waitForLoadState('domcontentloaded').then(() => {
+        void this.injectIntoFrame(frame);
+      }).catch(() => {});
+    });
+  }
+
+  private async injectIntoFrames(page: Page): Promise<void> {
+    for (const frame of page.frames()) {
+      if (frame === page.mainFrame()) continue;
+      await this.injectIntoFrame(frame).catch(() => {});
+    }
+  }
+
+  private async injectIntoFrame(frame: import('playwright-core').Frame): Promise<void> {
+    const domain = this.tap?.targetDomain ?? '';
+    try {
+      await frame.evaluate(invokeInjected('fetch-tap', { domain }));
+      await frame.evaluate(loadInjected('discovery'));
+    } catch {}
   }
 
   private async reinstallRealApp(page: Page): Promise<void> {
@@ -506,6 +530,7 @@ export class ReplicataRuntime implements TaggingApi {
       await page.evaluate(loadInjected('event-tap'));
       await page.evaluate(loadInjected('state-tap'));
       await page.evaluate(loadInjected('discovery'));
+      await this.injectIntoFrames(page);
       await this.pushTagsToRealApp();
       void this.verifyAll();
     } catch (err) {

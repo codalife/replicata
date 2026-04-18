@@ -37,7 +37,10 @@ interface Window {
     let url: string;
     try {
       const parsed = new URL(rawUrl, window.location.origin);
-      if (!parsed.hostname.includes(targetDomain)) return response;
+      // Skip third-party analytics/tracking domains. Tap everything else —
+      // the user chose this tab, we observe all its API traffic.
+      const h = parsed.hostname;
+      if (h.includes('google-analytics') || h.includes('googletagmanager') || h.includes('doubleclick') || h.includes('facebook.com') || h.includes('sentry.io')) return response;
       url = parsed.href;
     } catch {
       return response;
@@ -118,5 +121,52 @@ interface Window {
       statusText: response.statusText,
       headers: response.headers,
     });
+  };
+
+  // --- XHR tap ---
+  const XHR = XMLHttpRequest.prototype;
+  const origOpen = XHR.open;
+  const origSend = XHR.send;
+
+  XHR.open = function (this: XMLHttpRequest, method: string, url: string | URL, ...rest: any[]) {
+    (this as any).__replicataMethod = method;
+    (this as any).__replicataUrl = url;
+    return origOpen.apply(this, [method, url, ...rest] as any);
+  };
+
+  XHR.send = function (this: XMLHttpRequest, ...sendArgs: any[]) {
+    const method = (this as any).__replicataMethod || 'GET';
+    const rawUrl = (this as any).__replicataUrl || '';
+
+    let url: string;
+    try {
+      const parsed = new URL(String(rawUrl), window.location.origin);
+      const h = parsed.hostname;
+      if (h.includes('google-analytics') || h.includes('googletagmanager') || h.includes('doubleclick') || h.includes('facebook.com') || h.includes('sentry.io')) {
+        return origSend.apply(this, sendArgs as any);
+      }
+      url = parsed.href;
+    } catch {
+      return origSend.apply(this, sendArgs as any);
+    }
+
+    this.addEventListener('load', function () {
+      const contentType = this.getResponseHeader('content-type') || '';
+      const bytes = Number(this.getResponseHeader('content-length') || 0) || (this.responseText?.length ?? 0);
+      try { window.__replicataRequest(url, method, this.status, contentType, bytes); } catch {}
+
+      const isStream = contentType.includes('text/event-stream') || contentType.includes('application/x-ndjson');
+
+      if (isStream && this.responseText) {
+        const streamId = 'stream_' + ++streamCounter + '_' + Date.now();
+        window.__replicataStreamStart(streamId, url, method, this.status, contentType);
+        window.__replicataChunk(streamId, this.responseText);
+        window.__replicataStreamEnd(streamId);
+      } else if (this.responseText && this.responseText.length > 0 && this.responseText.length <= 512 * 1024) {
+        window.__replicataResponseBody(url + '|' + method, this.responseText);
+      }
+    });
+
+    return origSend.apply(this, sendArgs as any);
   };
 })

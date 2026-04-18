@@ -33,7 +33,7 @@ export class NetworkTap {
   private onStreamEnd?: StreamEndCb;
   private onRequest?: RequestCb;
   private onResponseBody?: ResponseBodyCb;
-  private targetDomain: string;
+  readonly targetDomain: string;
 
   constructor(page: Page, targetDomain: string) {
     this.page = page;
